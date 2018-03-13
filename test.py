@@ -1,16 +1,16 @@
 import boto3
 
-def create_bucket(site_name):
+def create_bucket(bucket_name):
   client = boto3.client('s3')
-  bucket_name = site_name+ ".test.foridaho.org"
-  client.create_bucket(ACL='public-read', Bucket=bucket_name)
-  resource = boto3.resource('s3')
+  client.create_bucket(Bucket=bucket_name)
   index_file_name = "index.html"
   error_file_name = "error.html"
-  resource.meta.client.upload_file('./index.html', bucket_name, index_file_name)
-  resource.meta.client.upload_file('./error.html', bucket_name, error_file_name)
-  response = make_file_public_read(bucket_name, index_file_name)
-  response = make_file_public_read(bucket_name, error_file_name)
+  data = open(index_file_name, 'rb')
+  s3 = boto3.resource('s3')
+  s3.Bucket(bucket_name).put_object(Key=index_file_name, Body=data, ContentType='text/html')
+  data = open(error_file_name, 'rb')
+  s3.Bucket(bucket_name).put_object(Key=error_file_name, Body=data, ContentType='text/html')
+  make_bucket_public_readable(bucket_name)
   client.put_bucket_website(Bucket=bucket_name,
     WebsiteConfiguration={
         'ErrorDocument': {
@@ -21,16 +21,22 @@ def create_bucket(site_name):
         }
     }
   )
+  print("{} Created. Check {}.s3-website-us-east-1.amazonaws.com".format(bucket_name, bucket_name))
 
-def make_file_public_read(bucket_name, key):
-  object_acl = s3.ObjectAcl(bucket_name, )
-  return object_acl.put(ACL='public-read')
+def make_bucket_public_readable(bucket_name):
+  bucket_policy = boto3.resource('s3').BucketPolicy(bucket_name)
+  policy_string = '{{\
+    "Version":"2012-10-17",\
+    "Statement":[{{\
+      "Sid":"PublicReadGetObject",\
+      "Effect":"Allow",\
+      "Principal": "*",\
+      "Action":["s3:GetObject"],\
+      "Resource":["arn:aws:s3:::{}/*"]\
+      }}]\
+  }}'.format(bucket_name)
+  response = bucket_policy.put(Policy=policy_string)
+    
 
-def get_buckets():
-  s3 = boto3.client('s3')
-  response = s3.list_buckets()
-  buckets = [bucket['Name'] for bucket in response['Buckets']]
-  print("Bucket List: %s" % buckets)
-
-get_buckets()
-create_bucket("test2")
+bucket_name = input('Enter bucket name: ')
+create_bucket(bucket_name)
